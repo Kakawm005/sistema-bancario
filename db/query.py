@@ -36,8 +36,6 @@ def Main():
         else:
             ErroMensager()
 
-        print(id)
-
         if id:
             retorno = Home(id)
             if retorno == "stop":
@@ -312,6 +310,12 @@ def ConsultarSaldo(id):
     )
     dados = cursor.fetchall()[0][0]
     conexao.close()
+    print('****************************')
+    sleep(0.5)
+    print(f'***********{dados}***********')
+    sleep(0.5)
+    print('****************************')
+    sleep(0.5)
     return dados
 
 
@@ -412,6 +416,7 @@ def Deposito(id):
 
 
 def ConsultarExtrato(id):
+    lista_dados = ['ID', 'DATA E HORA', 'TIPO DA TRANSAÇÃO', ]
     conexao = sqlite3.connect("banco.db")
     cursor = conexao.cursor()
     cursor.execute(
@@ -421,7 +426,16 @@ def ConsultarExtrato(id):
         """,
         (id,)
     )
-    dados = cursor.fetchall()
+    dados = cursor.fetchall()[0]
+    for dado in dados:
+        if type(dado) == str:
+            dado.upper()
+        print('****************************')
+        sleep(0.5)
+        print(f'{dado}')
+        sleep(0.5)
+        print('****************************')
+        sleep(0.5)
     conexao.close()
     return dados
 
