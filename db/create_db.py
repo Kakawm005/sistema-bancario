@@ -1,36 +1,40 @@
 import sqlite3
+from contextlib import closing, contextmanager
 
-conexao = sqlite3.connect("banco.db")
-
-cursor = conexao.cursor()
-
-conexao.execute("PRAGMA foreign_keys = ON")
+ARQUIVO_BANCO = "banco.db"
 
 
-cursor.execute("""
-    CREATE TABLE Conta (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome CHAR NOT NULL,
-        senha TEXT NOT NULL,
-        num_conta TEXT NOT NULL,
-        num_agencia TEXT NOT NULL,
-        saldo REAL DEFAULT 0
-    );
-""")
-    
-cursor.execute("""
-    CREATE TABLE Extratos(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data_hora TEXT NOT NULL,
-        tipo_transacao TEXT NOT NULL,
-        valor REAL DEFAULT 0 NOT NULL,
-        conta_destino id,
-        conta_id INTEGER,
-        FOREIGN KEY (conta_id) REFERENCES Conta(id)
-    );
+@contextmanager
+def conectar():
+    with closing(sqlite3.connect(ARQUIVO_BANCO)) as conexao:
+        conexao.execute("PRAGMA foreign_keys = ON")
+        with conexao:
+            yield conexao
 
 
-""")
+def inicializar_banco():
+    with conectar() as conexao:
+        conexao.executescript("""
+            CREATE TABLE IF NOT EXISTS Conta (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                senha TEXT NOT NULL,
+                num_conta TEXT NOT NULL,
+                num_agencia TEXT NOT NULL,
+                saldo REAL NOT NULL DEFAULT 0
+            );
 
-conexao.commit()
-conexao.close()
+            CREATE TABLE IF NOT EXISTS Extratos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data_hora TEXT NOT NULL,
+                tipo_transacao TEXT NOT NULL,
+                valor REAL NOT NULL,
+                conta_destino INTEGER,
+                conta_id INTEGER NOT NULL,
+                FOREIGN KEY (conta_id) REFERENCES Conta(id)
+            );
+        """)
+
+
+if __name__ == "__main__":
+    inicializar_banco()

@@ -1,442 +1,196 @@
-import sqlite3
-from time import sleep
-import os
+import hashlib
+import hmac
+import re
+import secrets
+import sys
 from datetime import datetime
+from decimal import Decimal
+from getpass import getpass
+
+from db.create_db import conectar
+
+ITERACOES_SENHA = 600_000
+SALDO_MAXIMO = 999_999_999_999.99
 
 
 def Main():
     while True:
-        print('****************************')
-        sleep(0.5)
-        print('*****SELECIONE*UMA*OPÇÃO****')
-        sleep(0.5)
-        print('****************************')       
-        print('****************************')
-        sleep(0.5)
-        print('*******1- *CRIAR*CONTA******')
-        sleep(0.5)
-        print('****************************')       
-        print('****************************')
-        sleep(0.5)
-        print('*********2*-*ENTRAR*********')
-        sleep(0.5)
-        print('****************************')     
-        print('****************************')
-        sleep(0.5)
-        print('**********3*-*SAIR**********')
-        sleep(0.5)
-        print('****************************')     
-        resposta = str(input('R:'))  
+        print("\nSistema Bancário\n1. Criar conta\n2. Entrar\n3. Sair")
+        resposta = input("Opção: ").strip()
         if resposta == "1":
             CriarConta()
         elif resposta == "2":
-            id = EntrarConta()
+            conta_id = EntrarConta()
+            if conta_id is not None and Home(conta_id) == "stop":
+                return
         elif resposta == "3":
-            break
+            return
         else:
-            ErroMensager()
-
-        if id:
-            retorno = Home(id)
-            if retorno == "stop":
-                break
+            print("Opção inválida.")
 
 
-def Home(id):
+def Home(conta_id):
     while True:
-        print('****************************')
-        sleep(0.3)
-        print('****1*-*CONSULTAR*SALDO*****')
-        sleep(0.3)
-        print('****************************') 
-        sleep(0.3) 
-        print('****************************')
-        sleep(0.3)
-        print('***2*-*CONSULTAR*EXTRATO****')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('*********3*-*SAQUES*********')
-        sleep(0.3)
-        print('****************************')  
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('********4*-*DEPÓSITOS*******')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('*****5*-*TRANSFERÊNCIAS*****')
-        sleep(0.3)
-        print('****************************') 
-        sleep(0.3) 
-        print('****************************')
-        sleep(0.3)
-        print('*******6*-*PAGAMENTOS*******')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('**********7*-*PIX***********')
-        sleep(0.3)
-        print('****************************')  
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('******8*-*EMPRÉSTIMOS*******')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('*********9*-*CARTÕES********')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('***10*-*CONTA*E*SEGURANÇA***')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('****************************')
-        sleep(0.3)
-        print('****11*-*OUTROS*SERVIÇOS****')
-        sleep(0.3)
-        print('****************************')
-        print('****************************')
-        sleep(0.3)
-        print('*********12*-*SAIR**********')
-        sleep(0.3)
-        print('****************************')
-        resposta = str(input("R:"))
-        os.system("cls")
-        if resposta == '1':
-            ConsultarSaldo(id)
-        elif resposta == '2':
-            ConsultarExtrato(id)
-        elif resposta == '3':
-            Saque(id)
-        elif resposta == '4':
-            Deposito(id)
-        elif resposta == '5':
-            erro404()
-        elif resposta == '6':
-            erro404()
-        elif resposta == '7':
-            erro404()
-        elif resposta == '8':
-            erro404()
-        elif resposta == '9':
-            erro404()
-        elif resposta == '10':
-            erro404()
-        elif resposta == '11':
-            erro404()
-        elif resposta == '12':
+        print(
+            "\nMinha conta\n1. Consultar saldo\n2. Consultar extrato"
+            "\n3. Sacar\n4. Depositar\n0. Voltar ao menu inicial\n12. Sair"
+        )
+        resposta = input("Opção: ").strip()
+        if resposta == "1":
+            ConsultarSaldo(conta_id)
+        elif resposta == "2":
+            ConsultarExtrato(conta_id)
+        elif resposta == "3":
+            Saque(conta_id)
+        elif resposta == "4":
+            Deposito(conta_id)
+        elif resposta == "0":
+            return
+        elif resposta == "12":
             return "stop"
         else:
-            ErroMensager()
-    
-    
-
-def erro404():
-    print('****************************')
-    sleep(0.5)
-    print('ESSA*PÁGINA*NÃO*EXISTE*AINDA')
-    sleep(0.5)
-    print('****************************')
-    return None
+            print("Opção inválida.")
 
 
-def ErroMensager():
-    print('****************************')
-    sleep(0.5)
-    print('DIGITE*OS*DADOS*CORRETAMENTE')
-    sleep(0.5)
-    print('****************************')
-    return None
+def ler_senha():
+    if sys.stdin.isatty():
+        return getpass("Senha: ")
+    return input("Senha: ")
+
+
+def codificar_senha(senha, salt=None):
+    if salt is None:
+        salt = secrets.token_hex(16)
+    hash_senha = hashlib.pbkdf2_hmac(
+        "sha256", senha.encode("utf-8"), bytes.fromhex(salt), ITERACOES_SENHA
+    )
+    return f"pbkdf2_sha256${salt}${hash_senha.hex()}"
 
 
 def CriarConta():
-    try:
-        conexao = sqlite3.connect("banco.db")
-        cursor = conexao.cursor()
-        print('****************************')
-        sleep(0.5)
-        print('******DIGITE*O*SEU*NOME*****')
-        sleep(0.5)
-        print('****************************')
-        nome = str(input('R:'))
-        if not nome:
-            ErroMensager()
-            return False
-        os.system("cls")
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-        print('******DIGITE*SUA*SENHA******')
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-        senha = str(input('R:'))
-        if not senha:
-            ErroMensager()
-            return False
-        os.system("cls")
-        print('****************************')
-        sleep(0.5)
-        print('**DIGITE*O*NUMERO*DA*CONTA**')
-        sleep(0.5)
-        print('****************************')
-        num_conta = str(input('R:'))
-        if not num_conta:
-            ErroMensager()
-            return False
-        os.system("cls")
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-        print('*DIGITE*O*NUMERO*DA*AGÊNCIA*')
-        sleep(0.5)
-        print('****************************')
-        num_agencia = str(input('R:'))
-        if not num_agencia:
-            ErroMensager()
-            return False
-        sleep(0.5)
-        cursor.execute(
-            "INSERT INTO Conta (nome, senha, num_conta, num_agencia) VALUES (?, ?, ?, ?)",
-            (nome, senha, num_conta, num_agencia)
+    nome = input("Nome: ").strip()
+    senha = ler_senha()
+    num_conta = input("Número da conta: ").strip()
+    num_agencia = input("Número da agência: ").strip()
+    if not all((nome, senha.strip(), num_conta, num_agencia)):
+        print("Preencha todos os campos.")
+        return
+
+    with conectar() as conexao:
+        cursor = conexao.execute(
+            """
+            INSERT INTO Conta (nome, senha, num_conta, num_agencia)
+            SELECT ?, ?, ?, ?
+            WHERE NOT EXISTS (SELECT 1 FROM Conta WHERE num_conta = ?)
+            """,
+            (nome, codificar_senha(senha), num_conta, num_agencia, num_conta),
         )
-        conexao.commit()
-        conexao.close()
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-        print('**CONTA*CRIADA*COM*SUCESSO**')
-        sleep(0.5)
-        print('****************************')
-    except:
-        ErroMensager()
-        return False
+    if cursor.rowcount == 0:
+        print("Já existe uma conta com esse número.")
+        return
+    print("Conta criada com sucesso.")
 
 
 def EntrarConta():
-    conexao = sqlite3.connect("banco.db")
-    cursor = conexao.cursor()
-    print('****************************')
-    sleep(0.5)
-    print('**DIGITE*O*NUMERO*DA*CONTA**')
-    sleep(0.5)
-    print('****************************')
-    sleep(0.5)
-    num_conta = str(input('R:'))
-    os.system("cls")
-    print('****************************')
-    sleep(0.5)
-    print('******DIGITE*SUA*SENHA******')
-    sleep(0.5)
-    print('****************************')
-    sleep(0.5) 
-    senha = str(input('R:'))
-    os.system("cls")
-    cursor.execute(
-        """
-            SELECT id, nome FROM Conta
-            WHERE num_conta = ?
-            AND senha = ?
-        """,
-        (num_conta, senha)
-    )
-    try:
-        id, nome = cursor.fetchall()[0]
-        if id and nome:
-            print('****************************')
-            sleep(0.5)
-            print(f'*BEM VINDO DE VOLTA {nome.upper()}*')
-            sleep(0.5)
-            print('****************************')
-            sleep(0.5)
-            return id
-        else:
-            print('****************************')
-            sleep(0.5)
-            print('****CONTA*NÃO*ENCONTRADA****')
-            sleep(0.5)
-            print('****************************')
-            sleep(0.5)
-            conexao.close()
-            return False
-    except IndexError:
-        print('****************************')
-        sleep(0.5)
-        print('****CONTA*NÃO*ENCONTRADA****')
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-        conexao.close()
-        return False
+    num_conta = input("Número da conta: ").strip()
+    senha = ler_senha()
+    with conectar() as conexao:
+        contas = conexao.execute(
+            "SELECT id, nome, senha FROM Conta WHERE num_conta = ? ORDER BY id",
+            (num_conta,),
+        ).fetchall()
+        for conta_id, nome, senha_salva in contas:
+            hash_salvo = re.fullmatch(r"pbkdf2_sha256\$([0-9a-f]{32})\$[0-9a-f]{64}", senha_salva)
+            if hash_salvo:
+                senha_digitada = codificar_senha(senha, hash_salvo[1])
+            else:
+                senha_digitada = senha
+            if not hmac.compare_digest(senha_digitada.encode("utf-8"), senha_salva.encode("utf-8")):
+                continue
+            if not hash_salvo:
+                conexao.execute(
+                    "UPDATE Conta SET senha = ? WHERE id = ? AND senha = ?",
+                    (codificar_senha(senha), conta_id, senha_salva),
+                )
+            print(f"Bem-vindo, {nome}!")
+            return conta_id
+
+    print("Conta ou senha inválida.")
+    return None
 
 
-def CriarExtrato(tipo_transacao, valor, conta_id):
-    conexao = sqlite3.connect("banco.db")
-    cursor = conexao.cursor()
+def formatar_valor(valor):
+    return f"R$ {valor:.2f}".replace(".", ",")
 
-    data_hora = datetime.now().strftime("%I:%M - %d/%m/%Y")
 
-    cursor.execute(
+def ConsultarSaldo(conta_id):
+    with conectar() as conexao:
+        saldo, = conexao.execute("SELECT saldo FROM Conta WHERE id = ?", (conta_id,)).fetchone()
+    print(f"Saldo: {formatar_valor(saldo)}")
+    return saldo
+
+
+def ler_valor(prompt):
+    entrada = input(prompt).strip()
+    if re.fullmatch(r"[0-9]+(?:[.,][0-9]{1,2})?", entrada):
+        valor = Decimal(entrada.replace(",", "."))
+        if 0 < valor <= Decimal(str(SALDO_MAXIMO)):
+            return float(valor)
+    print("Informe um valor positivo com até duas casas decimais dentro do limite da conta.")
+    return None
+
+
+def CriarExtrato(conexao, tipo_transacao, valor, conta_id):
+    data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    conexao.execute(
         "INSERT INTO Extratos (data_hora, tipo_transacao, valor, conta_id) VALUES (?, ?, ?, ?)",
-        (data_hora, tipo_transacao, valor, conta_id)
+        (data_hora, tipo_transacao, valor, conta_id),
     )
-    conexao.commit()
-    conexao.close()
 
 
-def ConsultarSaldo(id):
-    conexao = sqlite3.connect("banco.db")
-    cursor = conexao.cursor()
-    cursor.execute(
-        """
-            SELECT saldo FROM Conta
-            WHERE id = ?
-        """,
-        (id,)
-    )
-    dados = cursor.fetchall()[0][0]
-    conexao.close()
-    print('****************************')
-    sleep(0.5)
-    print(f'***********{dados}***********')
-    sleep(0.5)
-    print('****************************')
-    sleep(0.5)
-    return dados
+def Saque(conta_id):
+    valor = ler_valor("Valor do saque: ")
+    if valor is None:
+        return
+    with conectar() as conexao:
+        cursor = conexao.execute(
+            "UPDATE Conta SET saldo = ROUND(saldo - ?, 2) WHERE id = ? AND saldo >= ?",
+            (valor, conta_id, valor),
+        )
+        if cursor.rowcount == 0:
+            print("Saldo insuficiente.")
+            return
+        CriarExtrato(conexao, "Saque", valor, conta_id)
+    print("Saque realizado com sucesso.")
 
 
-def Saque(id):
-    conexao = sqlite3.connect("banco.db")
-    cursor = conexao.cursor()
-    cursor.execute(
-        """
-            SELECT saldo FROM Conta
-            WHERE id = ?
-        """,
-        (id,)
-    )
-    saldo = cursor.fetchall()[0][0]
-    if saldo <= 0:
-        print('****************************')
-        sleep(0.5)
-        print('****SEM*SALDO*SUFICIENTE****')
-        sleep(0.5)
-        print('****************************')
-        return False
-    else:
-        print('****************************')
-        sleep(0.5)
-        print('**QUAL*VALOR*DESEJA*SACAR?**')
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-        print(f'**********{saldo}**********')
-        sleep(0.5)
-        print('****************************')
-        saque = float(input('R:'))
-        os.system("cls")
-        if saldo >= saque:
-            valor = saldo - saque
-            cursor.execute(
-                """
-                    UPDATE Conta
-                    SET saldo = ?
-                    WHERE ?;
-                """,
-                (valor, id)
-            )
-            conexao.commit()
-            conexao.close()
-            print('****************************')
-            sleep(0.5)
-            print('*****SAQUE*BEM*SUCEDIDO*****')
-            sleep(0.5)
-            print('****************************')
-
-            CriarExtrato('Saque', saque, id)
-            return ''
+def Deposito(conta_id):
+    valor = ler_valor("Valor do depósito: ")
+    if valor is None:
+        return
+    with conectar() as conexao:
+        cursor = conexao.execute(
+            "UPDATE Conta SET saldo = ROUND(saldo + ?, 2) WHERE id = ? AND ROUND(saldo + ?, 2) <= ?",
+            (valor, conta_id, valor, SALDO_MAXIMO),
+        )
+        if cursor.rowcount == 0:
+            print(f"O saldo ultrapassaria o limite de {formatar_valor(SALDO_MAXIMO)}.")
+            return
+        CriarExtrato(conexao, "Depósito", valor, conta_id)
+    print("Depósito realizado com sucesso.")
 
 
-def Deposito(id):
-    try:
-        conexao = sqlite3.connect("banco.db")
-        cursor = conexao.cursor()
-        print('****************************')
-        sleep(0.5)
-        print('QUAL*VALOR*DESEJA*DEPOSITAR?')
-        sleep(0.5)
-        print('****************************')
-        deposito = float(input('R:'))
-        cursor.execute(
+def ConsultarExtrato(conta_id):
+    with conectar() as conexao:
+        transacoes = conexao.execute(
             """
-                SELECT saldo FROM Conta
-                WHERE id = ?
+            SELECT data_hora, tipo_transacao, valor FROM Extratos
+            WHERE conta_id = ? ORDER BY id DESC
             """,
-            (id,)
-        )
-
-        saldo = cursor.fetchall()[0][0]
-        os.system("cls")
-
-        valor = saldo + deposito
-
-        cursor.execute(
-        """
-            UPDATE Conta
-            SET saldo = ?
-            WHERE id = ?;
-        """,
-        (valor, id)
-        )
-        conexao.commit()
-        print('****************************')
-        sleep(0.5)
-        print('****DEPÓSITO*BEM*SUCEDIDO***')
-        sleep(0.5)
-        print('****************************')
-        return ''
-    except ValueError:
-        return ErroMensager()
-
-
-def ConsultarExtrato(id):
-    lista_dados = ['ID', 'DATA E HORA', 'TIPO DA TRANSAÇÃO', ]
-    conexao = sqlite3.connect("banco.db")
-    cursor = conexao.cursor()
-    cursor.execute(
-        """
-            SELECT * FROM Extratos
-            WHERE conta_id = ?
-        """,
-        (id,)
-    )
-    dados = cursor.fetchall()[0]
-    for dado in dados:
-        if type(dado) == str:
-            dado.upper()
-        print('****************************')
-        sleep(0.5)
-        print(f'{dado}')
-        sleep(0.5)
-        print('****************************')
-        sleep(0.5)
-    conexao.close()
-    return dados
-
-
+            (conta_id,),
+        ).fetchall()
+    if not transacoes:
+        print("Nenhuma movimentação no extrato.")
+    for data_hora, tipo, valor in transacoes:
+        print(f"{data_hora} | {tipo} | {formatar_valor(valor)}")
+    return transacoes
